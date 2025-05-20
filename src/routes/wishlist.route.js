@@ -11,7 +11,7 @@ dotenv.config();
 const router = express.Router();
 
 
-router.post('/get/:_id', userAuth(process.env.hidden_key), wishlistController.getWishlist);
+router.get('/get', userAuth(process.env.hidden_key), wishlistController.getWishlist);
 router.post('/add/:_id', userAuth(process.env.hidden_key), wishlistController.addWishProduct);
 router.post('/remove/:_id', userAuth(process.env.hidden_key), wishlistController.removeWishProduct);
 
