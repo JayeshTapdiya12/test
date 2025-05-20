@@ -21,7 +21,7 @@ export const getProduct = async (productId, user) => {
 
         if (userCart) {
             const productInCart = userCart.product.find(
-                (cartProduct) => cartProduct.productName === product.productName
+                (cartProduct) => cartProduct.productName === product.name
             );
             if (productInCart) {
                 return productInCart;
@@ -46,7 +46,7 @@ export const addProduct = async (productId, user) => {
 
     if (userCart) {
         const productInCart = userCart.product.find(
-            (cartProduct) => cartProduct.productName === product.productName
+            (cartProduct) => cartProduct.productName === product.name
         );
         if (productInCart) {
             productInCart.quantity += 1;
@@ -54,7 +54,7 @@ export const addProduct = async (productId, user) => {
             userCart.product.push({
                 description: product.description,
                 discountPrice: product.discountPrice,
-                productName: product.productName,
+                productName: product.name,
                 quantity: 1,
                 price: product.price,
                 image: product.img
