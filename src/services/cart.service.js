@@ -1,106 +1,125 @@
 import Cart from '../models/cart.model';
-import Product from '../models/product.model'
+import Product from '../models/product.model';
 
-
-export const getCart = async (body) => {
+export const getCart = async (user) => {
     try {
-        const data = await Cart.findOne({ cartBy: body.createdBy });
+        const data = await Cart.findOne({ cartBy: user.id });
         return data;
     } catch (error) {
         return "cart not found";
     }
-}
+};
 
-export const getProduct = async (productId, body) => {
+export const getProduct = async (productId, user) => {
     try {
+        const userCart = await Cart.findOne({ cartBy: user.id });
+        const product = await Product.findById(productId);
 
-
-        const userCart = await Cart.findOne({ cartBy: body.createdBy });
-        // ye apn ne find kiya hai konsa product hai from front end
-        const product = await Product.findOne({ _id: productId });
+        if (!product) {
+            return { message: "Product not found" };
+        }
 
         if (userCart) {
-
-            const productInCart = userCart.product.find(cartProduct => cartProduct.description === product.description);
+            const productInCart = userCart.product.find(
+                (cartProduct) => cartProduct.productName === product.productName
+            );
             if (productInCart) {
                 return productInCart;
             } else {
-                return { message: 'product not in the cart' }
+                return { message: "Product not in the cart" };
             }
         } else {
             return { message: "Cart not found for the user" };
         }
     } catch (error) {
-        console.error("Error finding book in cart:", error);
-        throw new Error("Error retrieving the book from the cart");
+        console.error("Error finding product in cart:", error);
+        throw new Error("Error retrieving the product from the cart");
     }
-}
+};
 
-
-export const addProduct = async (productId, body) => {
-    const productis = await Product.findById({ _id: productId });
-    if (!productis) {
+export const addProduct = async (productId, user) => {
+    const product = await Product.findById(productId);
+    if (!product) {
         throw new Error("Product not found");
     }
-    const isCartExist = await Cart.findOne({ cartBy: body.createdBy });
-    try {
-        if (isCartExist) {
+    let userCart = await Cart.findOne({ cartBy: user.id });
 
-            const isProductExist = isCartExist.product.find(cartProduct => cartProduct.productName === productis.name);
-            if (isProductExist) {
-                isProductExist.quantity += 1;
-            } else {
-                isCartExist.book.push({
-                    description: productis.description,
-                    discountPrice: productis.discountPrice,
-                    productName: productis.productisName,
-                    quantity: 1,
-                    price: productis.price,
-                    image: productis.img
-                })
-            }
+    if (userCart) {
+        const productInCart = userCart.product.find(
+            (cartProduct) => cartProduct.productName === product.productName
+        );
+        if (productInCart) {
+            productInCart.quantity += 1;
         } else {
-
-            isCartExist = new Cart({
-                cartBy: body.createdBy,
-                product: [{
-                    description: productis.description,
-                    discountPrice: productis.discountPrice,
-                    productName: productis.productName,
-                    quantity: 1,
-                    price: productis.price,
-                    image: productis.img
-                }]
+            userCart.product.push({
+                description: product.description,
+                discountPrice: product.discountPrice,
+                productName: product.productName,
+                quantity: 1,
+                price: product.price,
+                image: product.img
             });
         }
-        isCartExist.cartTotal = isCartExist.product.reduce((total, p) => {
+    } else {
+        userCart = new Cart({
+            cartBy: user.id,
+            product: [
+                {
+                    description: product.description,
+                    discountPrice: product.discountPrice,
+                    productName: product.productName,
+                    quantity: 1,
+                    price: product.price,
+                    image: product.img
+                }
+            ]
+        });
+    }
+
+    userCart.cartTotal = userCart.product.reduce((total, p) => {
+        const priceToUse = p.discountPrice != null ? p.discountPrice : p.price;
+        return total + priceToUse * p.quantity;
+    }, 0);
+
+    await userCart.save();
+    return userCart;
+};
+
+export const removeProduct = async (productId, user) => {
+    const product = await Product.findById(productId);
+    if (!product) {
+        throw new Error("Product not found");
+    }
+    const userCart = await Cart.findOne({ cartBy: user.id });
+    if (!userCart) {
+        throw new Error("Cart not found");
+    }
+
+    const productIndex = userCart.product.findIndex(
+        (cartProduct) => cartProduct.productName === product.productName
+    );
+
+    if (productIndex !== -1) {
+        const cartProduct = userCart.product[productIndex];
+        if (cartProduct.quantity > 1) {
+            cartProduct.quantity -= 1;
+        } else {
+            userCart.product.splice(productIndex, 1);
+        }
+
+        userCart.cartTotal = userCart.product.reduce((total, p) => {
             const priceToUse = p.discountPrice != null ? p.discountPrice : p.price;
-            return total + (priceToUse * p.quantity);
+            return total + priceToUse * p.quantity;
         }, 0);
 
-        await isCartExist.save();
-        return isCartExist;
-    } catch (error) {
-        console.error("Error adding product to cart:", error);
-        throw new Error("Failed to add product to cart");
-    }
-}
-
-
-export const removeProduct = async (productId, body) => {
-    const isProduct = await Product.findById({ _id: productId });;
-    const isExistCart = await Cart.findOne({ cartBy: body.createdBy });
-
-    if (isExistCart) {
-        const productIndex = isExistCart.product.findIndex(cartProduct => cartProduct.productName === isProduct.name);
-        if (productIndex !== -1) {
-            const cartProduct = isExistCart.product[productIndex];
-            if (cartProduct > 1) {
-                cartProduct -= 1;
-            } else {
-                isExistCart.product.splice(productIndex, 1)
-            }
-            await isExistCart.save();
+        if (userCart.product.length === 0) {
+            await userCart.deleteOne();
+            return { message: "Cart is empty and has been deleted." };
+        } else {
+            await userCart.save();
+            return userCart;
         }
+    } else {
+        throw new Error("Product not found in cart");
     }
-}
+};
